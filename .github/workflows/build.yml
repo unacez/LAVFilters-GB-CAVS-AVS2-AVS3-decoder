@@ -16,7 +16,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        choco install yasm
+        choco install yasm git
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v1.1
@@ -28,6 +28,9 @@ jobs:
 
     - name: Build LAV Filters
       run: |
+        # 使用Git Bash运行构建脚本
+        git bash -c "sh build_ffmpeg.sh x86"
+        git bash -c "sh build_ffmpeg.sh x64"
         msbuild LAVFilters.sln /m /p:Configuration=Release /p:Platform="x64" /p:PlatformToolset=v142
 
     - name: Upload artifacts
