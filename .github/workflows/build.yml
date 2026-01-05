@@ -16,7 +16,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        choco install yasm git
+        choco install yasm wget 7zip
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v1.1
@@ -26,11 +26,28 @@ jobs:
       with:
         arch: x64
 
+    - name: Download and setup FFmpeg libraries
+      run: |
+        # 创建thirdparty目录
+        mkdir thirdparty\64\include -Force
+        mkdir thirdparty\64\lib -Force
+        
+        # 下载FFmpeg开发库
+        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-essentials.7z" -OutFile "ffmpeg.7z"
+        
+        # 解压FFmpeg
+        7z x ffmpeg.7z -offmpeg-temp
+        $ffmpegDir = Get-ChildItem -Path ffmpeg-temp | Select-Object -First 1
+        $ffmpegPath = "ffmpeg-temp\$ffmpegDir"
+        
+        # 复制include目录
+        Copy-Item -Path "$ffmpegPath\include\*" -Destination "thirdparty\64\include" -Recurse
+        
+        # 复制lib目录中的.lib文件
+        Copy-Item -Path "$ffmpegPath\lib\*.lib" -Destination "thirdparty\64\lib" -Recurse
+
     - name: Build LAV Filters
       run: |
-        # 使用Git Bash运行构建脚本
-        git bash -c "sh build_ffmpeg.sh x86"
-        git bash -c "sh build_ffmpeg.sh x64"
         msbuild LAVFilters.sln /m /p:Configuration=Release /p:Platform="x64" /p:PlatformToolset=v142
 
     - name: Upload artifacts
