@@ -78,7 +78,6 @@ jobs:
           --disable-bsfs \
           --enable-bsf=extract_extradata,vp9_superframe_split \
           --disable-avdevice \
-          --disable-postproc \
           --disable-encoders \
           --disable-devices \
           --disable-programs \
