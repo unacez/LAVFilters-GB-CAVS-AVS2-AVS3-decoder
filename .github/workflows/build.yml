@@ -26,10 +26,11 @@ jobs:
         call "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -no_logo -arch=x86
 
         # 编译FFmpeg 32位
-        sh build_ffmpeg.sh x86
+        "C:\Program Files\Git\bin\bash.exe" build_ffmpeg.sh x86
 
         # 编译LAV Filters 32位
         MSBuild.exe LAVFilters.sln /nologo /m /t:Rebuild /property:Configuration=Release;Platform=Win32
+      shell: cmd
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
