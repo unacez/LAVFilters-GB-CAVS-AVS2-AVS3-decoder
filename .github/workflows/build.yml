@@ -167,7 +167,8 @@ jobs:
     - name: Create release package
       run: |
         # Create release package
-        $releaseName = "LAVFilters-$($env:GITHUB_REF_NAME -replace 'refs/tags/', '')-x86"
+        $tagName = $env:GITHUB_REF -replace 'refs/tags/', ''
+        $releaseName = "LAVFilters-$tagName-x86"
         New-Item -ItemType Directory -Name $releaseName
         Copy-Item -Path "artifacts/*" -Destination $releaseName -Recurse
         Compress-Archive -Path $releaseName -DestinationPath "$releaseName.zip"
@@ -189,6 +190,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./LAVFilters-${{ github.ref_name -replace 'refs/tags/', '' }}-x86.zip
-        asset_name: LAVFilters-${{ github.ref_name -replace 'refs/tags/', '' }}-x86.zip
+        asset_path: ./LAVFilters-${{ github.ref_name }}-x86.zip
+        asset_name: LAVFilters-${{ github.ref_name }}-x86.zip
         asset_content_type: application/zip
