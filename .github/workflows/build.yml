@@ -2,223 +2,37 @@ name: Build LAV Filters
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "master", "main" ]
-
-env:
-  # 设置环境变量
-  BUILD_NUMBER: ${{ github.run_number }}
-  VC_PLATFORM: x64
+    branches: [ main ]
 
 jobs:
-  build-ffmpeg:
-    name: Build FFmpeg (AVS2/AVS3 support)
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [x86_64]
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: 'recursive'
-
-    - name: Setup dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential yasm nasm autoconf automake libtool pkg-config git g++ curl wget unzip
-
-    - name: Install MinGW-w64 for cross-compilation
-      run: |
-        sudo apt-get install -y mingw-w64
-
-    - name: Setup FFmpeg source
-      run: |
-        if [ ! -d "ffmpeg" ]; then
-          git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg
-        fi
-        cd ffmpeg
-        git checkout master
-        git pull origin master
-
-    - name: Build FFmpeg for ${{ matrix.arch }}
-      run: |
-        if [ "${{ matrix.arch }}" = "x86_64" ]; then
-          export PATH="/usr/lib/gcc/x86_64-w64-mingw32/10-win32:$PATH"
-          export PKG_CONFIG_PATH="/usr/x86_64-w64-mingw32/lib/pkgconfig"
-          export cross_prefix="x86_64-w64-mingw32-"
-          export arch="x86_64"
-          export archdir="64"
-          export PKG_CONFIG_LIBDIR="../thirdparty/64/lib/pkgconfig:/usr/x86_64-w64-mingw32/lib/pkgconfig"
-        fi
-        
-        # 创建输出目录
-        mkdir -p bin_${archdir}/lib bin_${archdir}d/lib
-        
-        # 准备第三方库目录
-        mkdir -p ../thirdparty/${archdir}/include ../thirdparty/${archdir}/lib
-        
-        cd ffmpeg
-        
-        # 配置FFmpeg
-        ./configure \
-          --enable-shared \
-          --disable-static \
-          --enable-gpl \
-          --enable-version3 \
-          --disable-autodetect \
-          --enable-w32threads \
-          --disable-demuxer=matroska \
-          --disable-filters \
-          --enable-filter=scale,yadif,w3fdif,bwdif \
-          --disable-protocol=async,cache,concat,httpproxy,icecast,md5,subfile \
-          --disable-muxers \
-          --enable-muxer=spdif \
-          --disable-bsfs \
-          --enable-bsf=extract_extradata,vp9_superframe_split \
-          --disable-avdevice \
-          --disable-encoders \
-          --disable-devices \
-          --disable-programs \
-          --disable-debug \
-          --disable-doc \
-          --disable-avisynth \
-          --enable-bzlib \
-          --enable-d3d11va \
-          --enable-dxva2 \
-          --enable-gnutls \
-          --enable-gmp \
-          --enable-libdav1d \
-          --enable-libspeex \
-          --enable-libopencore-amrnb \
-          --enable-libopencore-amrwb \
-          --enable-libxml2 \
-          --enable-zlib \
-          --enable-libdavs2 \
-          --enable-libuavs3d \
-          --build-suffix=-lav \
-          --arch=${arch} \
-          --enable-cross-compile \
-          --cross-prefix=${cross_prefix} \
-          --target-os=mingw32 \
-          --pkg-config=pkg-config \
-          --extra-cflags="-fno-tree-vectorize -D_WIN32_WINNT=0x0600 -DWINVER=0x0600 -I../thirdparty/${archdir}/include" \
-          --extra-ldflags="-L../thirdparty/${archdir}/lib" \
-          --pkg-config-flags="--static --define-variable=prefix=../thirdparty/${archdir}"
-        
-        # 编译FFmpeg
-        make -j$(nproc)
-        
-        # 安装到bin目录
-        make install
-        cd ..
-
-    - name: Upload FFmpeg artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ffmpeg-${{ matrix.arch }}
-        path: |
-          bin_*/lib/
-          bin_*/bin/
-          bin_*/include/
-
-  build-lavfilters:
-    name: Build LAV Filters
-    needs: build-ffmpeg
+  build-32bit:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        platform: [x64]
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v3
       with:
-        submodules: 'recursive'
+        submodules: recursive
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.1
-
-    - name: Setup Visual Studio shell
-      uses: egor-tensin/vs-shell@v2
-      with:
-        arch: x64
-
-    - name: Download FFmpeg artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: ffmpeg-x86_64
-        path: bin_64
-
-    - name: Prepare thirdparty libraries
+    - name: Install dependencies
       run: |
-        # 创建thirdparty目录结构
-        New-Item -ItemType Directory -Path "thirdparty\64\lib" -Force
-        New-Item -ItemType Directory -Path "thirdparty\64\include" -Force
-        Copy-Item -Path "bin_64\lib\*.lib" -Destination "thirdparty\64\lib" -Force
-        Copy-Item -Path "bin_64\include\*" -Destination "thirdparty\64\include" -Recurse -Force
+        # 安装yasm等依赖
+        choco install yasm
 
-    - name: Build with MSBuild
+    - name: Build 32-bit package
       run: |
-        msbuild LAVFilters.sln /m /p:Configuration=Release /p:Platform="x64" /p:PlatformToolset=v142
+        # 设置VS环境变量
+        call "%ProgramFiles(x86)%\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -no_logo -arch=x86
 
-    - name: Prepare artifacts
-      run: |
-        # 创建发布目录
-        New-Item -ItemType Directory -Path "release_${{ matrix.platform }}" -Force
-        
-        # 复制编译输出
-        Copy-Item -Path "decoder\LAVAudio\x64\Release\LAVAudio.ax" -Destination "release_${{ matrix.platform }}" -Force
-        Copy-Item -Path "decoder\LAVVideo\x64\Release\LAVVideo.ax" -Destination "release_${{ matrix.platform }}" -Force
-        Copy-Item -Path "demuxer\LAVSplitter\x64\Release\LAVSplitter.ax" -Destination "release_${{ matrix.platform }}" -Force
+        # 编译FFmpeg 32位
+        sh build_ffmpeg.sh x86
 
-    - name: Upload LAV Filters artifacts
-      uses: actions/upload-artifact@v4
+        # 编译LAV Filters 32位
+        MSBuild.exe LAVFilters.sln /nologo /m /t:Rebuild /property:Configuration=Release;Platform=Win32
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
       with:
-        name: LAVFilters-${{ matrix.platform }}
-        path: release_${{ matrix.platform }}\*
-
-  create-release:
-    name: Create Release
-    needs: build-lavfilters
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-
-    - name: Create release archive
-      run: |
-        # 创建发布目录
-        mkdir -p LAVFilters-release
-        
-        # 复制64位文件
-        if [ -d "LAVFilters-x64" ]; then
-          cp LAVFilters-x64/* LAVFilters-release/ -r
-        fi
-        
-        # 创建压缩包
-        cd LAVFilters-release
-        zip -r ../LAVFilters-${GITHUB_REF_NAME}.zip .
-        
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      id: upload-release-asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./LAVFilters-${{ github.ref_name }}.zip
-        asset_name: LAVFilters-${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+        name: lavfilters-32bit
+        path: bin_Win32/*
