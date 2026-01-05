@@ -27,10 +27,10 @@ jobs:
         fetch-depth: 0
 
     - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.0.2
+      uses: microsoft/setup-msbuild@v2
 
     - name: Setup NuGet
-      uses: nuget/setup-nuget@v1
+      uses: nuget/setup-nuget@v2
       with:
         nuget-version: 'latest'
 
@@ -42,13 +42,6 @@ jobs:
     - name: Restore NuGet packages
       run: nuget restore LAVFilters.sln
 
-    - name: Build 32-bit ffmpeg
-      run: |
-        # 使用项目提供的脚本编译支持 AVS2/AVS3 的 32 位 ffmpeg
-        # 由于是 Windows 环境，需要使用预先编译好的库或设置交叉编译环境
-        echo "Setting up build environment for 32-bit ffmpeg..."
-        # 在实际环境中，这一步可能需要更复杂的配置
-
     - name: Build LAVFilters 32-bit
       run: |
         msbuild LAVFilters.sln /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v142
@@ -56,14 +49,14 @@ jobs:
     - name: Prepare artifacts
       run: |
         mkdir artifacts
-        copy bin_win32\LAVAudio.ax artifacts\
-        copy bin_win32\LAVVideo.ax artifacts\
-        copy bin_win32\LAVSplitter.ax artifacts\
-        copy README.txt artifacts\
-        copy CHANGELOG.txt artifacts\
+        if (Test-Path "bin_win32\LAVAudio.ax") { Copy-Item "bin_win32\LAVAudio.ax" artifacts\ }
+        if (Test-Path "bin_win32\LAVVideo.ax") { Copy-Item "bin_win32\LAVVideo.ax" artifacts\ }
+        if (Test-Path "bin_win32\LAVSplitter.ax") { Copy-Item "bin_win32\LAVSplitter.ax" artifacts\ }
+        Copy-Item "README.txt" "artifacts\"
+        Copy-Item "CHANGELOG.txt" "artifacts\"
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: LAVFilters-32bit-${{ github.sha }}
         path: artifacts/
@@ -97,21 +90,67 @@ jobs:
           libopencore-amrnb-dev \
           libopencore-amrwb-dev \
           libxml2-dev \
-          zlib1g-dev \
-          libdavs2-dev \
-          libuavs3d-dev
+          zlib1g-dev
 
     - name: Build ffmpeg for Windows
       run: |
+        # Since the project has specific build scripts for AVS2/AVS3 support
         if [ "${{ matrix.arch }}" = "x86" ]; then
-          ./build_ffmpeg_avs23_x86.sh
+          # First ensure we have the correct path setup
+          cd ffmpeg
+          ./configure \
+            --enable-shared \
+            --disable-static \
+            --enable-gpl \
+            --enable-version3 \
+            --enable-w32threads \
+            --disable-demuxer=matroska \
+            --disable-filters \
+            --enable-filter=scale,yadif,w3fdif \
+            --disable-protocol=async,cache,concat,httpproxy,icecast,md5,subfile \
+            --disable-muxers \
+            --enable-muxer=spdif \
+            --disable-bsfs \
+            --enable-bsf=extract_extradata,vp9_superframe_split \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --enable-libdav1d \
+            --enable-libdavs2 \
+            --enable-libspeex \
+            --enable-libopencore-amrnb \
+            --enable-libopencore-amrwb \
+            --enable-avresample \
+            --enable-avisynth \
+            --disable-avdevice \
+            --disable-postproc \
+            --disable-swresample \
+            --disable-encoders \
+            --disable-devices \
+            --disable-programs \
+            --disable-debug \
+            --disable-doc \
+            --disable-schannel \
+            --enable-gnutls \
+            --enable-gmp \
+            --build-suffix=-lav \
+            --arch=i686 \
+            --cpu=i686 \
+            --enable-cross-compile \
+            --cross-prefix=i686-w64-mingw32- \
+            --target-os=mingw32 \
+            --pkg-config=pkg-config \
+            --extra-cflags="-fno-tree-vectorize -D_WIN32_WINNT=0x0600 -DWINVER=0x0600 -mmmx -msse -msse2 -mfpmath=sse -mstackrealign" \
+            --extra-ldflags=""
+          make -j$(nproc)
+          cd ..
         fi
 
     - name: Upload ffmpeg libraries
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ffmpeg-${{ matrix.arch }}-libs
-        path: bin_win32/lib/
+        path: ffmpeg/bin_${{ matrix.arch }}/lib/
 
   package-release:
     needs: [build-32bit]
@@ -120,17 +159,18 @@ jobs:
     
     steps:
     - name: Download artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: LAVFilters-32bit-${{ github.sha }}
         path: artifacts/
 
     - name: Create release package
       run: |
-        # 创建发布包
-        mkdir "LAVFilters-${{ github.ref_name }}-x86"
-        Copy-Item -Path "artifacts/*" -Destination "LAVFilters-${{ github.ref_name }}-x86" -Recurse
-        Compress-Archive -Path "LAVFilters-${{ github.ref_name }}-x86" -DestinationPath "LAVFilters-${{ github.ref_name }}-x86.zip"
+        # Create release package
+        $releaseName = "LAVFilters-$($env:GITHUB_REF_NAME -replace 'refs/tags/', '')-x86"
+        New-Item -ItemType Directory -Name $releaseName
+        Copy-Item -Path "artifacts/*" -Destination $releaseName -Recurse
+        Compress-Archive -Path $releaseName -DestinationPath "$releaseName.zip"
 
     - name: Create Release
       id: create_release
@@ -149,6 +189,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./LAVFilters-${{ github.ref_name }}-x86.zip
-        asset_name: LAVFilters-${{ github.ref_name }}-x86.zip
+        asset_path: ./LAVFilters-${{ github.ref_name -replace 'refs/tags/', '' }}-x86.zip
+        asset_name: LAVFilters-${{ github.ref_name -replace 'refs/tags/', '' }}-x86.zip
         asset_content_type: application/zip
