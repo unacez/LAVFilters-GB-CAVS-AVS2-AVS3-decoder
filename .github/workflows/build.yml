@@ -235,7 +235,7 @@ jobs:
         
         # 创建压缩包
         cd LAVFilters-release
-        zip -r ../LAVFilters-${GITHUB_REF#refs/tags/}.zip .
+        zip -r ../LAVFilters-${GITHUB_REF_NAME}.zip .
         
     - name: Create Release
       id: create_release
@@ -255,6 +255,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./LAVFilters-${{ github.ref#refs/tags/ }}.zip
-        asset_name: LAVFilters-${{ github.ref#refs/tags/ }}.zip
+        asset_path: ./LAVFilters-${{ github.ref_name }}.zip
+        asset_name: LAVFilters-${{ github.ref_name }}.zip
         asset_content_type: application/zip
