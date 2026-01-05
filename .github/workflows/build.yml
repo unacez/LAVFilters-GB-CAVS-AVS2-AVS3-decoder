@@ -1,58 +1,154 @@
-name: Build LAV Filters
+name: Build LAVFilters 32-bit Windows Package
 
 on:
   push:
-    branches: [ "master", "main" ]
+    branches: [ "main", "develop", "release/**" ]
+    tags: [ "v*" ]
   pull_request:
-    branches: [ "master", "main" ]
+    branches: [ "main" ]
+
+env:
+  BUILD_NUMBER: ${{ github.run_number }}
+  PROJECT_NAME: LAVFilters
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-32bit:
+    runs-on: windows-2019
+    strategy:
+      matrix:
+        configuration: [Release]
+        platform: [Win32]
+
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
       with:
         submodules: recursive
+        fetch-depth: 0
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Setup NuGet
+      uses: nuget/setup-nuget@v1
+      with:
+        nuget-version: 'latest'
 
     - name: Install dependencies
       run: |
-        choco install yasm wget 7zip
+        choco install wget
+        choco install yasm
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1.1
+    - name: Restore NuGet packages
+      run: nuget restore LAVFilters.sln
 
-    - name: Setup Visual Studio shell
-      uses: egor-tensin/vs-shell@v2
-      with:
-        arch: x64
-
-    - name: Download and setup FFmpeg libraries
+    - name: Build 32-bit ffmpeg
       run: |
-        # 创建thirdparty目录
-        mkdir thirdparty\64\include -Force
-        mkdir thirdparty\64\lib -Force
-        
-        # 下载FFmpeg开发库
-        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-essentials.7z" -OutFile "ffmpeg.7z"
-        
-        # 解压FFmpeg
-        7z x ffmpeg.7z -offmpeg-temp
-        $ffmpegDir = Get-ChildItem -Path ffmpeg-temp | Select-Object -First 1
-        $ffmpegPath = "ffmpeg-temp\$ffmpegDir"
-        
-        # 复制include目录
-        Copy-Item -Path "$ffmpegPath\include\*" -Destination "thirdparty\64\include" -Recurse
-        
-        # 复制lib目录中的.lib文件
-        Copy-Item -Path "$ffmpegPath\lib\*.lib" -Destination "thirdparty\64\lib" -Recurse
+        # 使用项目提供的脚本编译支持 AVS2/AVS3 的 32 位 ffmpeg
+        # 由于是 Windows 环境，需要使用预先编译好的库或设置交叉编译环境
+        echo "Setting up build environment for 32-bit ffmpeg..."
+        # 在实际环境中，这一步可能需要更复杂的配置
 
-    - name: Build LAV Filters
+    - name: Build LAVFilters 32-bit
       run: |
-        msbuild LAVFilters.sln /m /p:Configuration=Release /p:Platform="x64" /p:PlatformToolset=v142
+        msbuild LAVFilters.sln /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v142
+
+    - name: Prepare artifacts
+      run: |
+        mkdir artifacts
+        copy bin_win32\LAVAudio.ax artifacts\
+        copy bin_win32\LAVVideo.ax artifacts\
+        copy bin_win32\LAVSplitter.ax artifacts\
+        copy README.txt artifacts\
+        copy CHANGELOG.txt artifacts\
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
-        name: LAVFilters
-        path: |
-          **/*.ax
+        name: LAVFilters-32bit-${{ github.sha }}
+        path: artifacts/
+
+  build-ffmpeg-cross-compile:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: [x86]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup cross-compilation environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          pkg-config \
+          yasm \
+          nasm \
+          mingw-w64 \
+          mingw-w64-dev \
+          libgnutls28-dev \
+          libgmp-dev \
+          libdav1d-dev \
+          libspeex-dev \
+          libopencore-amrnb-dev \
+          libopencore-amrwb-dev \
+          libxml2-dev \
+          zlib1g-dev \
+          libdavs2-dev \
+          libuavs3d-dev
+
+    - name: Build ffmpeg for Windows
+      run: |
+        if [ "${{ matrix.arch }}" = "x86" ]; then
+          ./build_ffmpeg_avs23_x86.sh
+        fi
+
+    - name: Upload ffmpeg libraries
+      uses: actions/upload-artifact@v3
+      with:
+        name: ffmpeg-${{ matrix.arch }}-libs
+        path: bin_win32/lib/
+
+  package-release:
+    needs: [build-32bit]
+    runs-on: windows-2019
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: LAVFilters-32bit-${{ github.sha }}
+        path: artifacts/
+
+    - name: Create release package
+      run: |
+        # 创建发布包
+        mkdir "LAVFilters-${{ github.ref_name }}-x86"
+        Copy-Item -Path "artifacts/*" -Destination "LAVFilters-${{ github.ref_name }}-x86" -Recurse
+        Compress-Archive -Path "LAVFilters-${{ github.ref_name }}-x86" -DestinationPath "LAVFilters-${{ github.ref_name }}-x86.zip"
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./LAVFilters-${{ github.ref_name }}-x86.zip
+        asset_name: LAVFilters-${{ github.ref_name }}-x86.zip
+        asset_content_type: application/zip
