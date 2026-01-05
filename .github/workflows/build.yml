@@ -83,7 +83,7 @@ jobs:
           --disable-programs \
           --disable-debug \
           --disable-doc \
-          --enable-avisynth \
+          --disable-avisynth \
           --enable-bzlib \
           --enable-d3d11va \
           --enable-dxva2 \
