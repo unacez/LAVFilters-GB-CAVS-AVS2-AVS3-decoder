@@ -14,10 +14,10 @@ env:
 jobs:
   build-ffmpeg:
     name: Build FFmpeg (AVS2/AVS3 support)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x86_64, x86]
+        arch: [x86_64]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -55,13 +55,6 @@ jobs:
           export arch="x86_64"
           export archdir="64"
           export PKG_CONFIG_LIBDIR="../thirdparty/64/lib/pkgconfig:/usr/x86_64-w64-mingw32/lib/pkgconfig"
-        else
-          export PATH="/usr/lib/gcc/i686-w64-mingw32/10-win32:$PATH"
-          export PKG_CONFIG_PATH="/usr/i686-w64-mingw32/lib/pkgconfig"
-          export cross_prefix="i686-w64-mingw32-"
-          export arch="x86"
-          export archdir="32"
-          export PKG_CONFIG_LIBDIR="../thirdparty/32/lib/pkgconfig:/usr/i686-w64-mingw32/lib/pkgconfig"
         fi
         
         # 创建输出目录
@@ -141,7 +134,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        platform: [x64, x86]
+        platform: [x64]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -159,33 +152,20 @@ jobs:
     - name: Download FFmpeg artifacts
       uses: actions/download-artifact@v4
       with:
-        name: ffmpeg-${{ matrix.platform == 'x64' && 'x86_64' || 'x86' }}
-        path: bin_${{ matrix.platform == 'x64' && '64' || '32' }}
+        name: ffmpeg-x86_64
+        path: bin_64
 
     - name: Prepare thirdparty libraries
       run: |
         # 创建thirdparty目录结构
-        if ($matrix.platform -eq "x64") {
-          New-Item -ItemType Directory -Path "thirdparty\64\lib" -Force
-          New-Item -ItemType Directory -Path "thirdparty\64\include" -Force
-          Copy-Item -Path "bin_64\lib\*.lib" -Destination "thirdparty\64\lib" -Force
-          Copy-Item -Path "bin_64\include\*" -Destination "thirdparty\64\include" -Recurse -Force
-        } else {
-          New-Item -ItemType Directory -Path "thirdparty\32\lib" -Force
-          New-Item -ItemType Directory -Path "thirdparty\32\include" -Force
-          Copy-Item -Path "bin_32\lib\*.lib" -Destination "thirdparty\32\lib" -Force
-          Copy-Item -Path "bin_32\include\*" -Destination "thirdparty\32\include" -Recurse -Force
-        }
+        New-Item -ItemType Directory -Path "thirdparty\64\lib" -Force
+        New-Item -ItemType Directory -Path "thirdparty\64\include" -Force
+        Copy-Item -Path "bin_64\lib\*.lib" -Destination "thirdparty\64\lib" -Force
+        Copy-Item -Path "bin_64\include\*" -Destination "thirdparty\64\include" -Recurse -Force
 
     - name: Build with MSBuild
       run: |
-        if ($matrix.platform -eq "x64") {
-          $platformName = "x64"
-        } else {
-          $platformName = "Win32"
-        }
-        
-        msbuild LAVFilters.sln /m /p:Configuration=Release /p:Platform="$platformName" /p:PlatformToolset=v142
+        msbuild LAVFilters.sln /m /p:Configuration=Release /p:Platform="x64" /p:PlatformToolset=v142
 
     - name: Prepare artifacts
       run: |
@@ -193,15 +173,9 @@ jobs:
         New-Item -ItemType Directory -Path "release_${{ matrix.platform }}" -Force
         
         # 复制编译输出
-        if ($matrix.platform -eq "x64") {
-          Copy-Item -Path "decoder\LAVAudio\x64\Release\LAVAudio.ax" -Destination "release_${{ matrix.platform }}" -Force
-          Copy-Item -Path "decoder\LAVVideo\x64\Release\LAVVideo.ax" -Destination "release_${{ matrix.platform }}" -Force
-          Copy-Item -Path "demuxer\LAVSplitter\x64\Release\LAVSplitter.ax" -Destination "release_${{ matrix.platform }}" -Force
-        } else {
-          Copy-Item -Path "decoder\LAVAudio\Win32\Release\LAVAudio.ax" -Destination "release_${{ matrix.platform }}" -Force
-          Copy-Item -Path "decoder\LAVVideo\Win32\Release\LAVVideo.ax" -Destination "release_${{ matrix.platform }}" -Force
-          Copy-Item -Path "demuxer\LAVSplitter\Win32\Release\LAVSplitter.ax" -Destination "release_${{ matrix.platform }}" -Force
-        }
+        Copy-Item -Path "decoder\LAVAudio\x64\Release\LAVAudio.ax" -Destination "release_${{ matrix.platform }}" -Force
+        Copy-Item -Path "decoder\LAVVideo\x64\Release\LAVVideo.ax" -Destination "release_${{ matrix.platform }}" -Force
+        Copy-Item -Path "demuxer\LAVSplitter\x64\Release\LAVSplitter.ax" -Destination "release_${{ matrix.platform }}" -Force
 
     - name: Upload LAV Filters artifacts
       uses: actions/upload-artifact@v4
@@ -223,14 +197,9 @@ jobs:
         # 创建发布目录
         mkdir -p LAVFilters-release
         
-        # 合并32位和64位文件
+        # 复制64位文件
         if [ -d "LAVFilters-x64" ]; then
           cp LAVFilters-x64/* LAVFilters-release/ -r
-        fi
-        
-        if [ -d "LAVFilters-x86" ]; then
-          mkdir -p LAVFilters-release/x86
-          cp LAVFilters-x86/* LAVFilters-release/x86/ -r
         fi
         
         # 创建压缩包
