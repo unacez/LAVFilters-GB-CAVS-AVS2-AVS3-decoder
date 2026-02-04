@@ -45,13 +45,11 @@ jobs:
       with:
         name: ffmpeg-x86-libs
         path: |
-          bin_Win32/lib/
-          bin_Win32/*.dll
-          bin_Win32d/lib/
-          bin_Win32d/*.dll
+          bin_Win32/
+          bin_Win32d/
 
   build-32bit:
-    needs: [build-ffmpeg-windows, build-ffmpeg-cross-compile-32]  # Make sure FFmpeg is built first
+    needs: [build-ffmpeg-windows]  # Make sure FFmpeg is built first
     runs-on: windows-2019
     strategy:
       matrix:
@@ -70,13 +68,6 @@ jobs:
       with:
         name: ffmpeg-x86-libs
         path: .
-
-    - name: Download FFmpeg libraries (32-bit cross-compiled)  # Fallback in case native build failed
-      uses: actions/download-artifact@v4
-      with:
-        name: ffmpeg-x86-libs-cross
-        path: .
-      continue-on-error: true
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
@@ -151,10 +142,8 @@ jobs:
       with:
         name: ffmpeg-x86-libs-cross
         path: |
-          bin_Win32/lib/
-          bin_Win32/*.dll
-          bin_Win32d/lib/
-          bin_Win32d/*.dll
+          bin_win32/
+          bin_win32d/
 
   build-ffmpeg-cross-compile-64:
     runs-on: ubuntu-20.04
@@ -194,10 +183,8 @@ jobs:
       with:
         name: ffmpeg-x64-libs
         path: |
-          bin_x64/lib/
-          bin_x64/*.dll
-          bin_x64d/lib/
-          bin_x64d/*.dll
+          bin_x64/
+          bin_x64d/
           
   build-64bit:
     needs: [build-ffmpeg-cross-compile-64]  # Use Linux-built FFmpeg libs
