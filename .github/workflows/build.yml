@@ -65,6 +65,37 @@ jobs:
         fi
       shell: bash
 
+    - name: Check libbluray config.h
+      run: |
+        # Verify that config.h exists in the libbluray directory
+        if (Test-Path "libbluray/config.h") {
+          echo "config.h exists in libbluray directory"
+          Get-Content "libbluray/config.h" | Select-Object -First 5
+        } else {
+          echo "ERROR: config.h does not exist in libbluray directory"
+          exit 1
+        }
+      shell: pwsh
+
+    - name: Patch libbluray project for config.h
+      run: |
+        # Replace $(ProjectDir) with absolute path to ensure config.h is found
+        $projectFile = "libbluray/libbluray.vcxproj"
+        $content = Get-Content $projectFile
+        $absolutePath = Resolve-Path "libbluray"
+        $content = $content -replace '\$\(ProjectDir\)', "$absolutePath\"
+        $content | Set-Content $projectFile
+      shell: pwsh
+
+    - name: Build libbluray for ${{ matrix.arch }}
+      run: |
+        if [ "${{ matrix.arch }}" = "x86" ]; then
+          msbuild libbluray/libbluray.vcxproj /m /p:Configuration=Release /p:Platform=Win32
+        else
+          msbuild libbluray/libbluray.vcxproj /m /p:Configuration=Release /p:Platform=x64
+        fi
+      shell: cmd
+
     - name: Build LAV Filters with MSBuild
       run: |
         msbuild LAVFilters.sln /m /t:Rebuild /property:Configuration=Release,"Platform=${{ matrix.arch == 'x86' && 'Win32' || 'x64' }}"

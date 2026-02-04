@@ -70,3 +70,9 @@ sh build_ffmpeg_avs23_x64.sh
 - Windows SDK
 - MinGW-w64 (用于交叉编译)
 - Git (用于子模块)
+
+## 构建注意事项
+
+- 构建顺序很重要：必须先构建 FFmpeg，再构建 libbluray，最后构建 LAV Filters
+- libbluray 项目需要 config.h 文件，该文件位于 libbluray 根目录
+- 在某些构建环境中，可能需要确保 $(ProjectDir) 正确指向包含 config.h 的目录
