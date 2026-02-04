@@ -135,12 +135,12 @@ jobs:
 
     - name: Build libbluray for ${{ matrix.arch }}
       run: |
-        if [ "${{ matrix.arch }}" = "x86" ]; then
+        if /I "${{ matrix.arch }}" == "x86" (
           msbuild libbluray/libbluray.vcxproj /m /p:Configuration=Release /p:Platform=Win32
-        else
+        ) else (
           msbuild libbluray/libbluray.vcxproj /m /p:Configuration=Release /p:Platform=x64
-        fi
-      shell: bash
+        )
+      shell: cmd
 
     - name: Upload libbluray artifacts
       uses: actions/upload-artifact@v4
@@ -173,12 +173,12 @@ jobs:
 
     - name: Build LAV Filters with MSBuild
       run: |
-        if [ "${{ matrix.arch }}" = "x86" ]; then
+        if /I "${{ matrix.arch }}" == "x86" (
           msbuild LAVFilters.sln /m /t:Rebuild /property:Configuration=Release,Platform=Win32
-        else
+        ) else (
           msbuild LAVFilters.sln /m /t:Rebuild /property:Configuration=Release,Platform=x64
-        fi
-      shell: bash
+        )
+      shell: cmd
 
     - name: Upload LAV Filters artifacts
       uses: actions/upload-artifact@v4
