@@ -35,21 +35,19 @@ sh build_ffmpeg_avs23_x64.sh
 
 ## GitHub Actions 构建
 
-项目已配置 GitHub Actions 工作流，位于 `.github/workflows/build.yml`。工作流包含以下特性：
+项目已配置 GitHub Actions 工作流，位于 `.github/workflows/build.yml`。工作流采用分步构建策略，包含以下特性：
 
 1. **多架构支持**：同时构建 32 位 (x86) 和 64 位 (x64) 版本
-2. **跨平台编译**：使用 MinGW-w64 进行交叉编译
-3. **自动化流程**：自动触发于推送和拉取请求事件
-4. **制品管理**：自动打包并上传构建产物
+2. **分步构建**：将构建过程分解为 FFmpeg、libbluray 和 LAV Filters 三个独立阶段
+3. **依赖管理**：各阶段之间有明确的依赖关系
+4. **自动化流程**：自动触发于推送和拉取请求事件
+5. **制品管理**：自动打包并上传构建产物
 
 工作流执行步骤：
-1. 设置 MinGW-w64 交叉编译环境
-2. 安装必要依赖（GCC、YASM、make 等）
-3. 配置 Visual Studio 开发环境
-4. 准备目录结构
-5. 构建对应架构的 FFmpeg 库
-6. 使用 MSBuild 构建 LAV Filters
-7. 打包并上传构建产物
+1. **FFmpeg 构建阶段**：设置 MinGW-w64 交叉编译环境，构建 FFmpeg 库
+2. **libbluray 构建阶段**：基于 FFmpeg 构建成果，构建 libbluray 库
+3. **LAV Filters 构建阶段**：使用前两个阶段的成果，构建主程序
+4. **打包阶段**：收集所有架构的构建产物并打包
 
 ## 关键修复
 
@@ -76,3 +74,5 @@ sh build_ffmpeg_avs23_x64.sh
 - 构建顺序很重要：必须先构建 FFmpeg，再构建 libbluray，最后构建 LAV Filters
 - libbluray 项目需要 config.h 文件，该文件位于 libbluray 根目录
 - 在某些构建环境中，可能需要确保 $(ProjectDir) 正确指向包含 config.h 的目录
+- libbluray 目录应该包含一个完整的、配置好的 libbluray 仓库，可以从 https://git.1f0.de/libbluray.git 获取
+- 如果构建过程中出现 config.h 找不到的错误，需要确保 libbluray 目录包含正确的文件

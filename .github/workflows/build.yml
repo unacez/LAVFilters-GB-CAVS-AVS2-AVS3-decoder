@@ -7,20 +7,17 @@ on:
     branches: [ master, main ]
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
+  build-ffmpeg:
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: [windows-latest]
         arch: [x86, x64]
-
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
 
     - name: Setup MSYS2
-      if: runner.os == 'Windows'
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
@@ -32,12 +29,6 @@ jobs:
           automake
           libtool
           pkg-config
-
-    - name: Install dependencies on Ubuntu
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential yasm autoconf automake libtool pkg-config mingw-w64
 
     - name: Setup Visual Studio Command Prompt
       uses: ilammy/msvc-dev-cmd@v1
@@ -64,6 +55,55 @@ jobs:
           ./build_ffmpeg.sh x64
         fi
       shell: bash
+
+    - name: Upload FFmpeg artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ffmpeg-${{ matrix.arch }}
+        path: |
+          bin_*/lib/
+          ffmpeg/
+
+  build-libbluray:
+    needs: build-ffmpeg
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x86, x64]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup libbluray if needed
+      run: |
+        # Check if libbluray/config.h exists, if not clone the correct repository
+        if [ ! -f "libbluray/config.h" ]; then
+          echo "libbluray/config.h not found, cloning libbluray repository"
+          rm -rf libbluray
+          git clone https://git.1f0.de/libbluray.git libbluray
+        else
+          echo "libbluray/config.h already exists"
+        fi
+        
+        # Verify config.h exists
+        if [ ! -f "libbluray/config.h" ]; then
+          echo "ERROR: Libbluray/config.h still not found after clone"
+          ls -la libbluray/
+          exit 1
+        fi
+      shell: bash
+
+    - name: Download FFmpeg artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ffmpeg-${{ matrix.arch }}
+        path: .
+
+    - name: Setup Visual Studio Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.arch }}
 
     - name: Check libbluray config.h
       run: |
@@ -96,12 +136,41 @@ jobs:
         fi
       shell: cmd
 
+    - name: Upload libbluray artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: libbluray-${{ matrix.arch }}
+        path: |
+          bin_*/lib/
+          libbluray/
+
+  build-lavfilters:
+    needs: [build-ffmpeg, build-libbluray]
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x86, x64]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: .
+
+    - name: Setup Visual Studio Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.arch }}
+
     - name: Build LAV Filters with MSBuild
       run: |
         msbuild LAVFilters.sln /m /t:Rebuild /property:Configuration=Release,"Platform=${{ matrix.arch == 'x86' && 'Win32' || 'x64' }}"
       shell: cmd
 
-    - name: Upload artifacts
+    - name: Upload LAV Filters artifacts
       uses: actions/upload-artifact@v4
       with:
         name: lav-filters-${{ matrix.arch }}
@@ -110,7 +179,7 @@ jobs:
           bin_*d/**/*
 
   package:
-    needs: build
+    needs: build-lavfilters
     runs-on: ubuntu-latest
     steps:
     - name: Download artifacts
@@ -119,8 +188,7 @@ jobs:
     - name: Package release
       run: |
         mkdir -p LAV-Filters-Build
-        cp -r lav-filters-x86/* LAV-Filters-Build/ 2>/dev/null || true
-        cp -r lav-filters-x64/* LAV-Filters-Build/ 2>/dev/null || true
+        cp -r lav-filters-*/* LAV-Filters-Build/ 2>/dev/null || true
         tar -czf LAV-Filters-Build.tar.gz LAV-Filters-Build/
 
     - name: Upload release package
@@ -128,3 +196,4 @@ jobs:
       with:
         name: LAV-Filters-Complete-Package
         path: LAV-Filters-Build.tar.gz
+
