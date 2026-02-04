@@ -14,10 +14,6 @@ env:
 jobs:
   build-ffmpeg-windows:
     runs-on: windows-2019
-    strategy:
-      matrix:
-        arch: [x86]
-        
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -39,15 +35,15 @@ jobs:
         choco install yasm
         choco install msys2
 
-    - name: Build FFmpeg for Windows
+    - name: Build FFmpeg for Windows (32-bit)
       run: |
         # Run the project's build script for FFmpeg
         sh build_ffmpeg_msvc.sh x86
         
-    - name: Upload FFmpeg libraries
+    - name: Upload FFmpeg libraries (32-bit)
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-${{ matrix.arch }}-libs
+        name: ffmpeg-x86-libs
         path: |
           bin_Win32/lib/
           bin_Win32/*.dll
@@ -55,7 +51,7 @@ jobs:
           bin_Win32d/*.dll
 
   build-32bit:
-    needs: [build-ffmpeg-windows]  # Make sure FFmpeg is built first
+    needs: [build-ffmpeg-windows, build-ffmpeg-cross-compile-32]  # Make sure FFmpeg is built first
     runs-on: windows-2019
     strategy:
       matrix:
@@ -69,11 +65,18 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - name: Download FFmpeg libraries
+    - name: Download FFmpeg libraries (32-bit native)
       uses: actions/download-artifact@v4
       with:
         name: ffmpeg-x86-libs
         path: .
+
+    - name: Download FFmpeg libraries (32-bit cross-compiled)  # Fallback in case native build failed
+      uses: actions/download-artifact@v4
+      with:
+        name: ffmpeg-x86-libs-cross
+        path: .
+      continue-on-error: true
 
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
@@ -110,11 +113,8 @@ jobs:
         name: LAVFilters-32bit-${{ github.sha }}
         path: artifacts/
 
-  build-ffmpeg-cross-compile:
+  build-ffmpeg-cross-compile-32:
     runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        arch: [x86, x64]
     
     steps:
     - name: Checkout repository
@@ -141,27 +141,66 @@ jobs:
           libxml2-dev \
           zlib1g-dev
 
-    - name: Build ffmpeg for Windows
+    - name: Build ffmpeg for Windows (32-bit)
       run: |
-        # Since the project has specific build scripts for AVS2/AVS3 support
-        if [ "${{ matrix.arch }}" = "x86" ]; then
-          # Build using project's script for 32-bit
-          sh build_ffmpeg_avs23_x86.sh
-        elif [ "${{ matrix.arch }}" = "x64" ]; then
-          # Build using project's script for 64-bit
-          sh build_ffmpeg_avs23_x64.sh
-        fi
+        # Build using project's script for 32-bit
+        sh build_ffmpeg_avs23_x86.sh
 
-    - name: Upload ffmpeg libraries
+    - name: Upload ffmpeg libraries (32-bit)
       uses: actions/upload-artifact@v4
       with:
-        name: ffmpeg-${{ matrix.arch }}-libs
+        name: ffmpeg-x86-libs-cross
         path: |
-          bin_*/lib/
-          bin_*/*.dll
+          bin_Win32/lib/
+          bin_Win32/*.dll
+          bin_Win32d/lib/
+          bin_Win32d/*.dll
 
+  build-ffmpeg-cross-compile-64:
+    runs-on: ubuntu-20.04
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup cross-compilation environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          pkg-config \
+          yasm \
+          nasm \
+          mingw-w64 \
+          mingw-w64-dev \
+          libgnutls28-dev \
+          libgmp-dev \
+          libdav1d-dev \
+          libspeex-dev \
+          libopencore-amrnb-dev \
+          libopencore-amrwb-dev \
+          libxml2-dev \
+          zlib1g-dev
+
+    - name: Build ffmpeg for Windows (64-bit)
+      run: |
+        # Build using project's script for 64-bit
+        sh build_ffmpeg_avs23_x64.sh
+
+    - name: Upload ffmpeg libraries (64-bit)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ffmpeg-x64-libs
+        path: |
+          bin_x64/lib/
+          bin_x64/*.dll
+          bin_x64d/lib/
+          bin_x64d/*.dll
+          
   build-64bit:
-    needs: [build-ffmpeg-cross-compile]  # Use Linux-built FFmpeg libs
+    needs: [build-ffmpeg-cross-compile-64]  # Use Linux-built FFmpeg libs
     runs-on: windows-2019
     strategy:
       matrix:
