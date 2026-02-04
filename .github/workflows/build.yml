@@ -1,301 +1,99 @@
-name: Build LAVFilters 32-bit Windows Package
+name: Build LAV Filters
 
 on:
   push:
-    branches: [ "main", "develop", "release/**" ]
-    tags: [ "v*" ]
+    branches: [ master, main ]
   pull_request:
-    branches: [ "main" ]
-
-env:
-  BUILD_NUMBER: ${{ github.run_number }}
-  PROJECT_NAME: LAVFilters
+    branches: [ master, main ]
 
 jobs:
-  build-ffmpeg-windows:
-    runs-on: windows-2019
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        fetch-depth: 0
-
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Setup NuGet
-      uses: nuget/setup-nuget@v2
-      with:
-        nuget-version: 'latest'
-
-    - name: Install dependencies
-      run: |
-        choco install wget
-        choco install yasm
-        choco install msys2
-
-    - name: Build FFmpeg for Windows (32-bit)
-      run: |
-        # Run the project's build script for FFmpeg
-        sh build_ffmpeg_msvc.sh x86
-        
-    - name: Upload FFmpeg libraries (32-bit)
-      uses: actions/upload-artifact@v4
-      with:
-        name: ffmpeg-x86-libs
-        path: |
-          bin_Win32/
-          bin_Win32d/
-
-  build-32bit:
-    needs: [build-ffmpeg-windows]  # Make sure FFmpeg is built first
-    runs-on: windows-2019
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        configuration: [Release]
-        platform: [Win32]
+        os: [windows-latest]
+        arch: [x86, x64]
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        fetch-depth: 0
-
-    - name: Download FFmpeg libraries (32-bit native)
-      uses: actions/download-artifact@v4
-      with:
-        name: ffmpeg-x86-libs
-        path: .
-
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Setup NuGet
-      uses: nuget/setup-nuget@v2
-      with:
-        nuget-version: 'latest'
-
-    - name: Install dependencies
-      run: |
-        choco install wget
-        choco install yasm
-
-    - name: Restore NuGet packages
-      run: nuget restore LAVFilters.sln
-
-    - name: Build LAVFilters 32-bit
-      run: |
-        msbuild LAVFilters.sln /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v142
-
-    - name: Prepare artifacts
-      run: |
-        mkdir artifacts
-        if (Test-Path "bin_win32\LAVAudio.ax") { Copy-Item "bin_win32\LAVAudio.ax" artifacts\ }
-        if (Test-Path "bin_win32\LAVVideo.ax") { Copy-Item "bin_win32\LAVVideo.ax" artifacts\ }
-        if (Test-Path "bin_win32\LAVSplitter.ax") { Copy-Item "bin_win32\LAVSplitter.ax" artifacts\ }
-        Copy-Item "README.txt" "artifacts\"
-        Copy-Item "CHANGELOG.txt" "artifacts\"
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: LAVFilters-32bit-${{ github.sha }}
-        path: artifacts/
-
-  build-ffmpeg-cross-compile-32:
-    runs-on: ubuntu-20.04
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v3
       with:
         submodules: recursive
 
-    - name: Setup cross-compilation environment
+    - name: Setup MSYS2
+      if: runner.os == 'Windows'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-yasm
+          make
+          autoconf
+          automake
+          libtool
+          pkg-config
+
+    - name: Install dependencies on Ubuntu
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          pkg-config \
-          yasm \
-          nasm \
-          mingw-w64 \
-          mingw-w64-dev \
-          libgnutls28-dev \
-          libgmp-dev \
-          libdav1d-dev \
-          libspeex-dev \
-          libopencore-amrnb-dev \
-          libopencore-amrwb-dev \
-          libxml2-dev \
-          zlib1g-dev
+        sudo apt-get install -y build-essential yasm autoconf automake libtool pkg-config mingw-w64
 
-    - name: Build ffmpeg for Windows (32-bit)
-      run: |
-        # Build using project's script for 32-bit
-        sh build_ffmpeg_avs23_x86.sh
-
-    - name: Upload ffmpeg libraries (32-bit)
-      uses: actions/upload-artifact@v4
+    - name: Setup Visual Studio Command Prompt
+      uses: ilammy/msvc-dev-cmd@v1
       with:
-        name: ffmpeg-x86-libs-cross
-        path: |
-          bin_win32/
-          bin_win32d/
+        arch: ${{ matrix.arch }}
 
-  build-ffmpeg-cross-compile-64:
-    runs-on: ubuntu-20.04
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Setup cross-compilation environment
+    - name: Prepare directory structure
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          pkg-config \
-          yasm \
-          nasm \
-          mingw-w64 \
-          mingw-w64-dev \
-          libgnutls28-dev \
-          libgmp-dev \
-          libdav1d-dev \
-          libspeex-dev \
-          libopencore-amrnb-dev \
-          libopencore-amrwb-dev \
-          libxml2-dev \
-          zlib1g-dev
+        mkdir -p thirdparty/32/lib
+        mkdir -p thirdparty/32/include
+        mkdir -p thirdparty/64/lib
+        mkdir -p thirdparty/64/include
+      shell: bash
 
-    - name: Build ffmpeg for Windows (64-bit)
+    - name: Build FFmpeg for ${{ matrix.arch }}
       run: |
-        # Build using project's script for 64-bit
-        sh build_ffmpeg_avs23_x64.sh
+        if [ "${{ matrix.arch }}" = "x86" ]; then
+          export CC="i686-w64-mingw32-gcc"
+          export CXX="i686-w64-mingw32-g++"
+          ./build_ffmpeg.sh x86
+        else
+          export CC="x86_64-w64-mingw32-gcc"
+          export CXX="x86_64-w64-mingw32-g++"
+          ./build_ffmpeg.sh x64
+        fi
+      shell: bash
 
-    - name: Upload ffmpeg libraries (64-bit)
-      uses: actions/upload-artifact@v4
-      with:
-        name: ffmpeg-x64-libs
-        path: |
-          bin_x64/
-          bin_x64d/
-          
-  build-64bit:
-    needs: [build-ffmpeg-cross-compile-64]  # Use Linux-built FFmpeg libs
-    runs-on: windows-2019
-    strategy:
-      matrix:
-        configuration: [Release]
-        platform: [x64]
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        fetch-depth: 0
-
-    - name: Download FFmpeg libraries (64-bit)
-      uses: actions/download-artifact@v4
-      with:
-        name: ffmpeg-x64-libs
-        path: .
-
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Setup NuGet
-      uses: nuget/setup-nuget@v2
-      with:
-        nuget-version: 'latest'
-
-    - name: Install dependencies
+    - name: Build LAV Filters with MSBuild
       run: |
-        choco install wget
-        choco install yasm
-
-    - name: Restore NuGet packages
-      run: nuget restore LAVFilters.sln
-
-    - name: Build LAVFilters 64-bit
-      run: |
-        msbuild LAVFilters.sln /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:PlatformToolset=v142
-
-    - name: Prepare artifacts
-      run: |
-        mkdir artifacts_x64
-        if (Test-Path "bin_x64\LAVAudio.ax") { Copy-Item "bin_x64\LAVAudio.ax" artifacts_x64\ }
-        if (Test-Path "bin_x64\LAVVideo.ax") { Copy-Item "bin_x64\LAVVideo.ax" artifacts_x64\ }
-        if (Test-Path "bin_x64\LAVSplitter.ax") { Copy-Item "bin_x64\LAVSplitter.ax" artifacts_x64\ }
+        msbuild LAVFilters.sln /m /t:Rebuild /property:Configuration=Release,"Platform=${{ matrix.arch == 'x86' && 'Win32' || 'x64' }}"
+      shell: cmd
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
-        name: LAVFilters-64bit-${{ github.sha }}
-        path: artifacts_x64/
+        name: lav-filters-${{ matrix.arch }}
+        path: |
+          bin_*/**/*
+          bin_*d/**/*
 
-  package-release:
-    needs: [build-32bit, build-64bit]
-    runs-on: windows-2019
-    if: startsWith(github.ref, 'refs/tags/v')
-    
+  package:
+    needs: build
+    runs-on: ubuntu-latest
     steps:
-    - name: Download 32-bit artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: LAVFilters-32bit-${{ github.sha }}
-        path: artifacts_32/
-        
-    - name: Download 64-bit artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: LAVFilters-64bit-${{ github.sha }}
-        path: artifacts_64/
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
 
-    - name: Create release package
+    - name: Package release
       run: |
-        # Create release package
-        $tagName = $env:GITHUB_REF -replace 'refs/tags/', ''
-        $releaseName = "LAVFilters-$tagName"
-        New-Item -ItemType Directory -Name $releaseName
-        
-        # Create directories for both architectures
-        New-Item -ItemType Directory -Name "$releaseName\x86"
-        New-Item -ItemType Directory -Name "$releaseName\x64"
-        
-        # Copy 32-bit files to x86 folder
-        Copy-Item -Path "artifacts_32/*" -Destination "$releaseName\x86" -Recurse
-        # Copy 64-bit files to x64 folder
-        Copy-Item -Path "artifacts_64/*" -Destination "$releaseName\x64" -Recurse
-        # Copy documentation to main folder
-        Copy-Item "README.txt" "$releaseName\"
-        Copy-Item "CHANGELOG.txt" "$releaseName\"
-        
-        Compress-Archive -Path $releaseName -DestinationPath "$releaseName.zip"
+        mkdir -p LAV-Filters-Build
+        cp -r lav-filters-x86/* LAV-Filters-Build/ 2>/dev/null || true
+        cp -r lav-filters-x64/* LAV-Filters-Build/ 2>/dev/null || true
+        tar -czf LAV-Filters-Build.tar.gz LAV-Filters-Build/
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload release package
+      uses: actions/upload-artifact@v3
       with:
-        tag_name: ${{ github.ref_name }}
-        release_name: Release ${{ github.ref_name }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./LAVFilters-${{ github.ref_name }}.zip
-        asset_name: LAVFilters-${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+        name: LAV-Filters-Complete-Package
+        path: LAV-Filters-Build.tar.gz

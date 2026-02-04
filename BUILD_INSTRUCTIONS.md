@@ -35,11 +35,21 @@ sh build_ffmpeg_avs23_x64.sh
 
 ## GitHub Actions 构建
 
-更新后的工作流文件现在正确地：
+项目已配置 GitHub Actions 工作流，位于 `.github/workflows/build.yml`。工作流包含以下特性：
 
-1. 先构建 FFmpeg 库（包括 32 位和 64 位版本）
-2. 然后使用这些库来构建 LAV Filters
-3. 最终打包包含两个架构的发布版本
+1. **多架构支持**：同时构建 32 位 (x86) 和 64 位 (x64) 版本
+2. **跨平台编译**：使用 MinGW-w64 进行交叉编译
+3. **自动化流程**：自动触发于推送和拉取请求事件
+4. **制品管理**：自动打包并上传构建产物
+
+工作流执行步骤：
+1. 设置 MinGW-w64 交叉编译环境
+2. 安装必要依赖（GCC、YASM、make 等）
+3. 配置 Visual Studio 开发环境
+4. 准备目录结构
+5. 构建对应架构的 FFmpeg 库
+6. 使用 MSBuild 构建 LAV Filters
+7. 打包并上传构建产物
 
 ## 关键修复
 
@@ -57,3 +67,5 @@ sh build_ffmpeg_avs23_x64.sh
 - NuGet
 - YASM 汇编器
 - Windows SDK
+- MinGW-w64 (用于交叉编译)
+- Git (用于子模块)
