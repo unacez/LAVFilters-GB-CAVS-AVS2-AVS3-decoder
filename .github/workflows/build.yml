@@ -15,7 +15,7 @@ jobs:
         arch: [x86, x64]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -71,7 +71,7 @@ jobs:
       shell: cmd
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: lav-filters-${{ matrix.arch }}
         path: |
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Download artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Package release
       run: |
@@ -93,7 +93,7 @@ jobs:
         tar -czf LAV-Filters-Build.tar.gz LAV-Filters-Build/
 
     - name: Upload release package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: LAV-Filters-Complete-Package
         path: LAV-Filters-Build.tar.gz

@@ -57,6 +57,7 @@ sh build_ffmpeg_avs23_x64.sh
 - 原始流程直接构建 LAV Filters 而没有先构建 FFmpeg
 - 导致 `libavutil/avconfig.h` 等必需的头文件缺失
 - 修复了 GitHub Actions 中的 artifact 路径配置，确保在不同平台上正确上传和下载构建产物
+- 更新了 GitHub Actions 中使用的 action 版本，使用较新的 v4 版本的 upload-artifact 和 download-artifact
 - 现在确保构建顺序正确，避免此类错误
 
 ## 依赖项
