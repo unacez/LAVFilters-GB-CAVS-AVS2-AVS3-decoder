@@ -81,7 +81,13 @@ jobs:
         if [ ! -f "libbluray/config.h" ]; then
           echo "libbluray/config.h not found, cloning libbluray repository"
           rm -rf libbluray
-          git clone https://git.1f0.de/libbluray.git libbluray
+          # Try alternative URLs for the libbluray repository
+          if git clone https://gitea.1f0.de/dekkers/libbluray.git libbluray; then
+            echo "Successfully cloned from gitea.1f0.de"
+          else
+            echo "Failed to clone from gitea.1f0.de"
+            exit 1
+          fi
         else
           echo "libbluray/config.h already exists"
         fi

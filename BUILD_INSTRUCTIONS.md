@@ -74,5 +74,5 @@ sh build_ffmpeg_avs23_x64.sh
 - 构建顺序很重要：必须先构建 FFmpeg，再构建 libbluray，最后构建 LAV Filters
 - libbluray 项目需要 config.h 文件，该文件位于 libbluray 根目录
 - 在某些构建环境中，可能需要确保 $(ProjectDir) 正确指向包含 config.h 的目录
-- libbluray 目录应该包含一个完整的、配置好的 libbluray 仓库，可以从 https://git.1f0.de/libbluray.git 获取
+- libbluray 目录应该包含一个完整的、配置好的 libbluray 仓库，可以从 https://gitea.1f0.de/dekkers/libbluray.git 获取
 - 如果构建过程中出现 config.h 找不到的错误，需要确保 libbluray 目录包含正确的文件

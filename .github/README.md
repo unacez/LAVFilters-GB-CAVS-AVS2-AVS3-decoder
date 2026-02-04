@@ -10,8 +10,9 @@
 2. **环境设置**：配置 MinGW-w64 交叉编译环境和 Visual Studio 开发环境
 3. **依赖安装**：安装编译所需的工具链（GCC、YASM、make 等）
 4. **FFmpeg 构建**：为 x86 和 x64 架构分别构建 FFmpeg 库
-5. **LAV Filters 构建**：使用 MSBuild 构建主项目
-6. **制品打包**：收集并上传构建产物
+5. **libbluray 构建**：从 `https://gitea.1f0.de/dekkers/libbluray.git` 获取并构建 libbluray 库
+6. **LAV Filters 构建**：使用 MSBuild 构建主项目
+7. **制品打包**：收集并上传构建产物
 
 ## 架构支持
 
