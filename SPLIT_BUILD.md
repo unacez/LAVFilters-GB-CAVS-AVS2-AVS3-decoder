@@ -29,7 +29,7 @@ LAV Filters 项目的构建过程可以分为三个主要阶段，每个阶段�
   msbuild libbluray.vcxproj /p:Configuration=Release /p:Platform=Win32
   cd ..
   ```
-- **注意**: libbluray 目录应该包含一个完整的、配置好的 libbluray 仓库，可以从 `https://gitea.1f0.de/dekkers/libbluray.git` 获取
+- **注意**: libbluray 目录应该包含一个完整的、配置好的 libbluray 仓库，可以从 `https://gitea.1f0.de/dekkers/libbluray.git` 或 `https://git.1f0.de/libbluray.git` 获取
 
 ### 阶段 3: LAV Filters 主程序构建
 - **目的**: 构建 LAV Filters 主程序
